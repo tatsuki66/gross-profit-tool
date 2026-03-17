@@ -1,0 +1,13 @@
+{
+  "name": "gross-profit-tool",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "browserify src/main.js -o dist/bundle.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "browserify": "^17.0.0"
+  }
+}
