@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>粗利分析レポート 生成ツール｜ビルマテル</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Meiryo UI", "Segoe UI", sans-serif;
+    background: #F0F4FA;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(26,53,87,0.10);
+    max-width: 640px;
+    width: 100%;
+    padding: 36px 40px;
+  }
+  .logo-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .logo-mark {
+    width: 42px; height: 42px;
+    background: #1A3557;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 22px;
+  }
+  .logo-text { font-size: 18px; font-weight: 700; color: #1A3557; }
+  .logo-sub  { font-size: 12px; color: #888; margin-top: 2px; }
+  h1 { font-size: 20px; color: #1A3557; margin-bottom: 6px; }
+  .desc { font-size: 13px; color: #666; margin-bottom: 24px; line-height: 1.7; }
+  .desc strong { color: #1A3557; }
+
+  .sheet-list {
+    background: #F5F8FF;
+    border: 1px solid #BDD0E8;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .sheet-list h3 { font-size: 13px; font-weight: 700; color: #1A3557; margin-bottom: 10px; }
+  .sheet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+  }
+  .sheet-item { font-size: 13px; color: #444; padding: 2px 0; }
+  .sheet-item::before { content: "●"; color: #2E75B6; margin-right: 6px; }
+  .notes { font-size: 12px; color: #888; margin-top: 12px; line-height: 1.8; }
+
+  .upload-area {
+    border: 2px dashed #BDD0E8;
+    border-radius: 10px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .upload-area:hover, .upload-area.dragover {
+    border-color: #2E75B6;
+    background: #F0F6FF;
+  }
+  .upload-area input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-text { font-size: 14px; color: #555; }
+  .upload-text span { color: #2E75B6; font-weight: 600; }
+  .upload-note { font-size: 12px; color: #999; margin-top: 4px; }
+  .file-selected {
+    font-size: 13px; color: #2E75B6; font-weight: 600;
+    margin-top: 8px; display: none;
+  }
+
+  .btn {
+    display: block; width: 100%;
+    background: #1A3557;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    box-shadow: 0 3px 10px rgba(26,53,87,0.25);
+    transition: background 0.2s, transform 0.1s;
+  }
+  .btn:hover:not(:disabled) { background: #2E75B6; transform: translateY(-1px); }
+  .btn:disabled { background: #aaa; cursor: not-allowed; box-shadow: none; transform: none; }
+
+  .progress {
+    margin-top: 16px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #2E75B6;
+    font-weight: 600;
+  }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 3px solid #BDD0E8;
+    border-top-color: #2E75B6;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .result {
+    margin-top: 16px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    display: none;
+  }
+  .result.success { background: #EAF7EE; border: 1px solid #7CC89A; color: #1a6e3a; }
+  .result.error   { background: #FEF0EE; border: 1px solid #E09080; color: #c0392b; }
+
+  .footer { margin-top: 28px; text-align: center; font-size: 11px; color: #bbb; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo-bar">
+    <div class="logo-mark">📊</div>
+    <div>
+      <div class="logo-text">ビルマテル</div>
+      <div class="logo-sub">粗利分析レポート 生成ツール</div>
+    </div>
+  </div>
+
+  <h1>粗利分析レポートを生成</h1>
+  <p class="desc">
+    CAULからエクスポートしたCSVをアップロードするだけで、<br>
+    <strong>粗利金額 ÷ 売上金額</strong> で粗利率を独自算出した分析レポート（Excel）を自動生成します。<br>
+    各シートの数値はSUMIF関数でローデータを参照しています。
+  </p>
+
+  <div class="sheet-list">
+    <h3>生成されるシート構成（全8シート）</h3>
+    <div class="sheet-grid">
+      <div class="sheet-item">① サマリー</div>
+      <div class="sheet-item">② 得意先別</div>
+      <div class="sheet-item">③ 担当者別</div>
+      <div class="sheet-item">④ 商品分類別</div>
+      <div class="sheet-item">⑤ 現場別</div>
+      <div class="sheet-item">⑥ 月次推移</div>
+      <div class="sheet-item">⑦ 得意先×担当者</div>
+      <div class="sheet-item">⑧ ローデータ</div>
+    </div>
+    <div class="notes">
+      ✦ 数値：カンマ区切り ／ 比率：%表示 ／ ネイビー×ブルー配色<br>
+      ✦ 粗利率10%未満の行は黄色でハイライト表示<br>
+      ✦ アップロードしたデータはサーバーに送信されません（ブラウザ内で完結）
+    </div>
+  </div>
+
+  <div class="upload-area" id="uploadArea">
+    <input type="file" id="fileInput" accept=".csv">
+    <div class="upload-icon">📂</div>
+    <div class="upload-text">ここをクリック、またはCSVをドラッグ＆ドロップ</div>
+    <div class="upload-note">UTF-8形式のCSVファイル（売上実績_XXXX.csv）</div>
+  </div>
+  <div class="file-selected" id="fileSelected">✓ <span id="fileName"></span></div>
+
+  <button class="btn" id="genBtn" disabled>📊 Excelレポートを生成</button>
+
+  <div class="progress" id="progress">
+    <div class="spinner"></div>
+    <span id="progText">処理中…</span>
+  </div>
+  <div class="result" id="result"></div>
+
+  <div class="footer">データはブラウザ内のみで処理されます。外部サーバーへの送信は一切行われません。</div>
+</div>
+
+<script>
+// ── 定数 ───────────────────────────────────────────────────────
+const RAW_SHEET = "⑧ローデータ";
+const COL = {
+  headerBg:"1A3557", headerFg:"FFFFFF",
+  subBg:"2E75B6",    subFg:"FFFFFF",
+  stripe1:"E8F0FB",  stripe2:"FFFFFF",
+  totalBg:"D6E4F7",  totalFg:"1A3557",
+  warnBg:"FFF2CC",   warnFg:"7F4F00",
+  border:"BDD0E8",
+};
+
+// ── UI ─────────────────────────────────────────────────────────
+const fileInput   = document.getElementById("fileInput");
+const uploadArea  = document.getElementById("uploadArea");
+const fileSelected= document.getElementById("fileSelected");
+const fileNameEl  = document.getElementById("fileName");
+const genBtn      = document.getElementById("genBtn");
+const progressEl  = document.getElementById("progress");
+const progText    = document.getElementById("progText");
+const resultEl    = document.getElementById("result");
+
+let selectedFile = null;
+
+uploadArea.addEventListener("dragover", e => { e.preventDefault(); uploadArea.classList.add("dragover"); });
+uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("dragover"));
+uploadArea.addEventListener("drop", e => {
+  e.preventDefault(); uploadArea.classList.remove("dragover");
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith(".csv")) setFile(f);
+});
+fileInput.addEventListener("change", e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+function setFile(f) {
+  selectedFile = f;
+  fileNameEl.textContent = f.name;
+  fileSelected.style.display = "block";
+  genBtn.disabled = false;
+  resultEl.style.display = "none";
+}
+
+function setProg(msg) {
+  progText.textContent = msg;
+  progressEl.style.display = msg ? "flex" : "none";
+}
+
+function showResult(ok, msg) {
+  resultEl.className = "result " + (ok ? "success" : "error");
+  resultEl.textContent = msg;
+  resultEl.style.display = "block";
+}
+
+genBtn.addEventListener("click", async () => {
+  if (!selectedFile) return;
+  genBtn.disabled = true;
+  resultEl.style.display = "none";
+  try {
+    const text = await selectedFile.text();
+    const { headers, rows } = parseCSV(text);
+    await buildExcel(headers, rows);
+    showResult(true, "✅ ダウンロード完了！「粗利分析レポート.xlsx」を確認してください。");
+  } catch(e) {
+    showResult(false, "❌ エラーが発生しました：" + e.message);
+    console.error(e);
+  } finally {
+    genBtn.disabled = false;
+    setProg("");
+  }
+});
+
+// ── CSV パース ─────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const headers = splitLine(lines[0]).map(h => h.trim().replace(/^\uFEFF/, ""));
+  const rows = lines.slice(1).map(l => {
+    const vals = splitLine(l);
+    const row = {};
+    headers.forEach((h, i) => { row[h] = vals[i]?.trim() ?? ""; });
+    return row;
+  });
+  return { headers, rows };
+}
+function splitLine(line) {
+  const r = []; let cur = ""; let inQ = false;
+  for (const c of line) {
+    if (c === '"') inQ = !inQ;
+    else if (c === ',' && !inQ) { r.push(cur); cur = ""; }
+    else cur += c;
+  }
+  r.push(cur); return r;
+}
+
+// ── ユーティリティ ──────────────────────────────────────────────
+const toNum = v => { const n = parseFloat(String(v).replace(/,/g,"")); return isNaN(n)?0:n; };
+const colLetter = idx => {
+  let s=""; idx++;
+  while(idx>0){idx--;s=String.fromCharCode(65+idx%26)+s;idx=Math.floor(idx/26);}
+  return s;
+};
+const A = (c,r) => `${colLetter(c)}${r}`;
+const mkFill = hex => ({patternType:"solid",fgColor:{rgb:hex},bgColor:{rgb:hex}});
+const mkFont = (bold,color,sz=10) => ({name:"Meiryo UI",bold,color:{rgb:color},sz});
+const mkBorder = (color=COL.border) => {
+  const s={style:"thin",color:{rgb:color}};
+  return {top:s,bottom:s,left:s,right:s};
+};
+const mkAlign = (h="left") => ({horizontal:h,vertical:"center",wrapText:false});
+
+const S = {
+  hdrL: {fill:mkFill(COL.headerBg),font:mkFont(true,COL.headerFg),border:mkBorder("4A6080"),alignment:mkAlign("left")},
+  hdrR: {fill:mkFill(COL.headerBg),font:mkFont(true,COL.headerFg),border:mkBorder("4A6080"),alignment:mkAlign("right")},
+  subL: {fill:mkFill(COL.subBg),   font:mkFont(true,COL.subFg),   border:mkBorder("5080A0"),alignment:mkAlign("left")},
+  titl: {fill:mkFill("FFFFFF"),    font:mkFont(true,COL.headerBg,13),alignment:mkAlign("left")},
+  note: {fill:mkFill("FFFFFF"),    font:{name:"Meiryo UI",sz:9,color:{rgb:"888888"},italic:true},alignment:mkAlign("left")},
+  totL: {fill:mkFill(COL.totalBg), font:mkFont(true,COL.totalFg), border:mkBorder(COL.border),alignment:mkAlign("left"),  numFmt:"@"},
+  totN: {fill:mkFill(COL.totalBg), font:mkFont(true,COL.totalFg), border:mkBorder(COL.border),alignment:mkAlign("right"), numFmt:"#,##0"},
+  totP: {fill:mkFill(COL.totalBg), font:mkFont(true,COL.totalFg), border:mkBorder(COL.border),alignment:mkAlign("right"), numFmt:"0.0%"},
+  dL: e=>({fill:mkFill(e?COL.stripe1:COL.stripe2),font:mkFont(false,"333333"),border:mkBorder(COL.border),alignment:mkAlign("left")}),
+  dN: e=>({fill:mkFill(e?COL.stripe1:COL.stripe2),font:mkFont(false,"333333"),border:mkBorder(COL.border),alignment:mkAlign("right"),numFmt:"#,##0"}),
+  dP: e=>({fill:mkFill(e?COL.stripe1:COL.stripe2),font:mkFont(false,"333333"),border:mkBorder(COL.border),alignment:mkAlign("right"),numFmt:"0.0%"}),
+  wL: {fill:mkFill(COL.warnBg),font:mkFont(false,COL.warnFg),border:mkBorder(COL.border),alignment:mkAlign("left")},
+  wN: {fill:mkFill(COL.warnBg),font:mkFont(false,COL.warnFg),border:mkBorder(COL.border),alignment:mkAlign("right"),numFmt:"#,##0"},
+  wP: {fill:mkFill(COL.warnBg),font:mkFont(false,COL.warnFg),border:mkBorder(COL.border),alignment:mkAlign("right"),numFmt:"0.0%"},
+};
+
+function mkCell(v, s) {
+  if (typeof v==="string" && v.startsWith("=")) return {t:"n",f:v.slice(1),v:0,s};
+  if (typeof v==="number") return {t:"n",v,s};
+  return {t:"s",v:String(v??""),s};
+}
+
+// ── Excel生成 ──────────────────────────────────────────────────
+async function buildExcel(headers, rows) {
+  const XLSX = window.XLSX;
+  const wb = {SheetNames:[], Sheets:{}};
+  const addSheet = (name, ws) => { wb.SheetNames.push(name); wb.Sheets[name]=ws; };
+
+  const DR = rows.length;
+  const colIdx = {};
+  headers.forEach((h,i)=>{ colIdx[h]=i; });
+  const CL = name => colLetter(colIdx[name]);
+
+  const SF = (cc, val, sc) =>
+    `=SUMIF('${RAW_SHEET}'!${CL(cc)}$2:${CL(cc)}$${DR+1},"${val}",'${RAW_SHEET}'!${CL(sc)}$2:${CL(sc)}$${DR+1})`;
+  const SPMONTH = (m, sc) =>
+    `=SUMPRODUCT((TEXT('${RAW_SHEET}'!${CL("売上日")}$2:${CL("売上日")}$${DR+1},"YYYY-MM")="${m}")*'${RAW_SHEET}'!${CL(sc)}$2:${CL(sc)}$${DR+1})`;
+  const SPCROSS = (cu, st, sc) =>
+    `=SUMPRODUCT(('${RAW_SHEET}'!${CL("得意先名")}$2:${CL("得意先名")}$${DR+1}="${cu}")*('${RAW_SHEET}'!${CL("担当者名")}$2:${CL("担当者名")}$${DR+1}="${st}")*'${RAW_SHEET}'!${CL(sc)}$2:${CL(sc)}$${DR+1})`;
+  const TOTAL = sc =>
+    `=SUM('${RAW_SHEET}'!${CL(sc)}$2:${CL(sc)}$${DR+1})`;
+  const CNTIF = (cn, val) =>
+    `=COUNTIF('${RAW_SHEET}'!${CL(cn)}$2:${CL(cn)}$${DR+1},"${val}")`;
+
+  const uniq = key => [...new Set(rows.map(r=>r[key]||"（未設定）"))].sort();
+  const customers = uniq("得意先名");
+  const staffs    = uniq("担当者名");
+  const products  = uniq("売上分類名");
+  const sites     = uniq("現場名");
+  const months    = [...new Set(rows.map(r=>(r["売上日"]||"").slice(0,7).replace("/","-")).filter(Boolean))].sort();
+
+  const jsAgg = key => {
+    const m={};
+    for(const r of rows){
+      const k=r[key]||"（未設定）";
+      if(!m[k])m[k]={u:0,a:0};
+      m[k].u+=toNum(r["売上金額"]);
+      m[k].a+=toNum(r["粗利金額"]);
+    }
+    return Object.entries(m).map(([k,v])=>({name:k,...v})).sort((x,y)=>y.a-x.a);
+  };
+
+  const makeWs = () => ({"!merges":[],"!cols":[],"!rows":[]});
+  const isLow = (u,a) => u>0 && a/u<0.10;
+
+  const writeTitle = (ws,r0,title,note,ncols) => {
+    for(let c=0;c<ncols;c++) ws[A(c,r0)] = mkCell(c===0?title:"", S.titl);
+    ws["!merges"].push({s:{r:r0-1,c:0},e:{r:r0-1,c:ncols-1}});
+    ws["!rows"][r0-1]={hpx:28};
+    for(let c=0;c<ncols;c++) ws[A(c,r0+1)] = mkCell(c===0?note:"", S.note);
+    ws["!merges"].push({s:{r:r0,c:0},e:{r:r0,c:ncols-1}});
+    ws["!rows"][r0]={hpx:16};
+    return r0+3;
+  };
+  const writeHdr = (ws,r0,labels) => {
+    labels.forEach((l,c)=> ws[A(c,r0)]=mkCell(l,c===0?S.hdrL:S.hdrR));
+    ws["!rows"][r0-1]={hpx:20};
+    return r0+1;
+  };
+  const writeSub = (ws,r0,label,ncols) => {
+    for(let c=0;c<ncols;c++) ws[A(c,r0)]=mkCell(c===0?label:"", S.subL);
+    ws["!merges"].push({s:{r:r0-1,c:0},e:{r:r0-1,c:ncols-1}});
+    ws["!rows"][r0-1]={hpx:20};
+    return r0+1;
+  };
+
+  // ① サマリー
+  setProg("① サマリーシート作成中…");
+  {
+    const ws=makeWs(); let r=writeTitle(ws,1,"粗利分析レポート　サマリー","※ 粗利率 = 粗利金額 ÷ 売上金額（CAULの粗利率列は不使用）",6);
+    r=writeSub(ws,r,"■ 全体集計",3);
+    [
+      ["売上金額合計", TOTAL("売上金額"), S.dN(true),  "#,##0", "円"],
+      ["粗利金額合計", TOTAL("粗利金額"), S.dN(false), "#,##0", "円"],
+      ["粗利率（全体）", `=IFERROR(${TOTAL("粗利金額").slice(1)}/${TOTAL("売上金額").slice(1)},0)`, {...S.dP(true)}, "0.0%", ""],
+      ["対象件数", rows.length, S.dN(false), "#,##0", "件"],
+      ["得意先数", customers.length, S.dN(true), "#,##0", "社"],
+      ["担当者数", staffs.length, S.dN(false), "#,##0", "名"],
+    ].forEach(([lb,v,st,fmt,unit])=>{
+      ws[A(0,r)]=mkCell(lb,S.dL(true));
+      ws[A(1,r)]={...mkCell(v,{...st,numFmt:fmt})};
+      ws[A(2,r)]=mkCell(unit,S.dL(true));
+      r++;
+    });
+    r++;
+    const custSorted=jsAgg("得意先名");
+    const writeRank=(title,list)=>{
+      r=writeSub(ws,r,title,6);
+      r=writeHdr(ws,r,["得意先名","売上金額","粗利金額","粗利率","売上構成比","粗利構成比"]);
+      list.forEach((kd,i)=>{
+        const e=i%2===0, low=isLow(kd.u,kd.a);
+        const uF=SF("得意先名",kd.name,"売上金額"), aF=SF("得意先名",kd.name,"粗利金額");
+        ws[A(0,r)]=mkCell(kd.name,low?S.wL:S.dL(e));
+        ws[A(1,r)]=mkCell(uF,low?S.wN:S.dN(e));
+        ws[A(2,r)]=mkCell(aF,low?S.wN:S.dN(e));
+        ws[A(3,r)]=mkCell(`=IFERROR(${A(2,r)}/${A(1,r)},0)`,low?S.wP:S.dP(e));
+        ws[A(4,r)]=mkCell(`=IFERROR(${A(1,r)}/${TOTAL("売上金額").slice(1)},0)`,low?S.wP:S.dP(e));
+        ws[A(5,r)]=mkCell(`=IFERROR(${A(2,r)}/${TOTAL("粗利金額").slice(1)},0)`,low?S.wP:S.dP(e));
+        r++;
+      });
+      r++;
+    };
+    writeRank("■ 粗利金額 TOP5 得意先", custSorted.slice(0,5));
+    writeRank("■ 粗利金額 BOTTOM5 得意先（低粗利注意）", [...custSorted].reverse().slice(0,5));
+    ws["!ref"]=`A1:F${r}`; ws["!cols"]=[28,16,16,10,12,12].map(w=>({wch:w}));
+    addSheet("①サマリー",ws);
+  }
+
+  // ② ④ 軸別共通
+  const makeAxis=(sname,title,colName)=>{
+    setProg(`${sname} 作成中…`);
+    const ws=makeWs(); let r=writeTitle(ws,1,`粗利分析　${title}`,"※ 粗利率 = 粗利金額 ÷ 売上金額（黄色ハイライト = 粗利率10%未満）",7);
+    r=writeHdr(ws,r,[title,"売上金額","粗利金額","粗利率","売上構成比","粗利構成比","件数"]);
+    jsAgg(colName).forEach((kd,i)=>{
+      const e=i%2===0, low=isLow(kd.u,kd.a);
+      const uF=SF(colName,kd.name,"売上金額"), aF=SF(colName,kd.name,"粗利金額");
+      ws[A(0,r)]=mkCell(kd.name,low?S.wL:S.dL(e));
+      ws[A(1,r)]=mkCell(uF,low?S.wN:S.dN(e));
+      ws[A(2,r)]=mkCell(aF,low?S.wN:S.dN(e));
+      ws[A(3,r)]=mkCell(`=IFERROR(${A(2,r)}/${A(1,r)},0)`,low?S.wP:S.dP(e));
+      ws[A(4,r)]=mkCell(`=IFERROR(${A(1,r)}/${TOTAL("売上金額").slice(1)},0)`,low?S.wP:S.dP(e));
+      ws[A(5,r)]=mkCell(`=IFERROR(${A(2,r)}/${TOTAL("粗利金額").slice(1)},0)`,low?S.wP:S.dP(e));
+      ws[A(6,r)]=mkCell(CNTIF(colName,kd.name),S.dN(e));
+      r++;
+    });
+    ws[A(0,r)]=mkCell("合　計",S.totL);
+    ws[A(1,r)]=mkCell(TOTAL("売上金額"),S.totN);
+    ws[A(2,r)]=mkCell(TOTAL("粗利金額"),S.totN);
+    ws[A(3,r)]=mkCell(`=IFERROR(${A(2,r)}/${A(1,r)},0)`,S.totP);
+    ws[A(4,r)]=mkCell("100.0%",S.totL);
+    ws[A(5,r)]=mkCell("100.0%",S.totL);
+    ws[A(6,r)]=mkCell(`=COUNTA('${RAW_SHEET}'!${CL(colName)}$2:${CL(colName)}$${DR+1})`,S.totN);
+    r++;
+    ws["!ref"]=`A1:G${r}`; ws["!cols"]=[30,16,16,10,12,12,10].map(w=>({wch:w}));
+    addSheet(sname,ws);
+  };
+  makeAxis("②得意先別","得意先名","得意先名");
+  makeAxis("③担当者別","担当者名","担当者名");
+  makeAxis("④商品分類別","売上分類名","売上分類名");
+  makeAxis("⑤現場別","現場名","現場名");
+
+  // ⑥ 月次推移
+  setProg("⑥ 月次推移シート作成中…");
+  {
+    const ws=makeWs(); let r=writeTitle(ws,1,"粗利分析　月次推移","※ 粗利率 = 粗利金額 ÷ 売上金額",5);
+    r=writeHdr(ws,r,["年月","売上金額","粗利金額","粗利率","前月差（粗利率）"]);
+    months.forEach((m,i)=>{
+      const e=i%2===0;
+      ws[A(0,r)]=mkCell(m,S.dL(e));
+      ws[A(1,r)]=mkCell(SPMONTH(m,"売上金額"),S.dN(e));
+      ws[A(2,r)]=mkCell(SPMONTH(m,"粗利金額"),S.dN(e));
+      ws[A(3,r)]=mkCell(`=IFERROR(${A(2,r)}/${A(1,r)},0)`,S.dP(e));
+      ws[A(4,r)]=i===0?mkCell("—",S.dL(e)):mkCell(`=IFERROR(${A(3,r)}-${A(3,r-1)},0)`,S.dP(e));
+      r++;
+    });
+    ws[A(0,r)]=mkCell("合　計",S.totL);
+    ws[A(1,r)]=mkCell(TOTAL("売上金額"),S.totN);
+    ws[A(2,r)]=mkCell(TOTAL("粗利金額"),S.totN);
+    ws[A(3,r)]=mkCell(`=IFERROR(${A(2,r)}/${A(1,r)},0)`,S.totP);
+    ws[A(4,r)]=mkCell("",S.totL); r++;
+    ws["!ref"]=`A1:E${r}`; ws["!cols"]=[14,16,16,10,16].map(w=>({wch:w}));
+    addSheet("⑥月次推移",ws);
+  }
+
+  // ⑦ 得意先×担当者
+  setProg("⑦ 得意先×担当者シート作成中…");
+  {
+    const ws=makeWs(); let r=writeTitle(ws,1,"粗利分析　得意先 × 担当者 クロス","※ 粗利率 = 粗利金額 ÷ 売上金額（黄色ハイライト = 粗利率10%未満）",6);
+    r=writeHdr(ws,r,["得意先名","担当者名","売上金額","粗利金額","粗利率","件数"]);
+    const cross=[];
+    for(const cu of customers) for(const st of staffs){
+      let u=0,a=0;
+      for(const row of rows){
+        if((row["得意先名"]||"（未設定）")===cu&&(row["担当者名"]||"（未設定）")===st){
+          u+=toNum(row["売上金額"]); a+=toNum(row["粗利金額"]);
+        }
+      }
+      if(u>0) cross.push({cu,st,u,a});
+    }
+    cross.sort((x,y)=>y.a-x.a).forEach((cd,i)=>{
+      const e=i%2===0, low=isLow(cd.u,cd.a);
+      ws[A(0,r)]=mkCell(cd.cu,low?S.wL:S.dL(e));
+      ws[A(1,r)]=mkCell(cd.st,low?S.wL:S.dL(e));
+      ws[A(2,r)]=mkCell(SPCROSS(cd.cu,cd.st,"売上金額"),low?S.wN:S.dN(e));
+      ws[A(3,r)]=mkCell(SPCROSS(cd.cu,cd.st,"粗利金額"),low?S.wN:S.dN(e));
+      ws[A(4,r)]=mkCell(`=IFERROR(${A(3,r)}/${A(2,r)},0)`,low?S.wP:S.dP(e));
+      ws[A(5,r)]=mkCell(
+        `=SUMPRODUCT(('${RAW_SHEET}'!${CL("得意先名")}$2:${CL("得意先名")}$${DR+1}="${cd.cu}")*('${RAW_SHEET}'!${CL("担当者名")}$2:${CL("担当者名")}$${DR+1}="${cd.st}"))`,
+        S.dN(e)
+      );
+      r++;
+    });
+    ws["!ref"]=`A1:F${r}`; ws["!cols"]=[30,14,16,16,10,10].map(w=>({wch:w}));
+    addSheet("⑦得意先×担当者",ws);
+  }
+
+  // ⑧ ローデータ
+  setProg("⑧ ローデータシート作成中…");
+  {
+    const ws=makeWs();
+    const numCols=new Set(["数量","売上単価","売上金額","原価単価","原価金額","粗利金額","粗利率","仕入NO","売上NO","売上NO行"]);
+    headers.forEach((h,ci)=>{ ws[A(ci,1)]=mkCell(h,S.hdrL); });
+    ws["!rows"][0]={hpx:20};
+    rows.forEach((row,ri)=>{
+      const e=ri%2===0;
+      headers.forEach((h,ci)=>{
+        const raw=row[h]??"";
+        const n=parseFloat(String(raw).replace(/,/g,""));
+        const isN=numCols.has(h)&&!isNaN(n)&&raw!=="";
+        const fmt=h==="粗利率"?"0.0%":numCols.has(h)?"#,##0":null;
+        const st=isN?{...S.dN(e),numFmt:fmt}:S.dL(e);
+        ws[A(ci,ri+2)]=isN?{t:"n",v:n,s:st}:{t:"s",v:String(raw),s:st};
+      });
+    });
+    const estW=str=>{let w=0;for(const c of String(str??""))w+=c.charCodeAt(0)>127?2.2:1.1;return Math.max(8,Math.min(w+2,30));};
+    ws["!cols"]=headers.map(h=>({wch:Math.min(Math.max(estW(h),...rows.slice(0,300).map(r=>estW(r[h]))),30)}));
+    ws["!ref"]=`A1:${colLetter(headers.length-1)}${rows.length+1}`;
+    ws["!freeze"]={xSplit:0,ySplit:1};
+    addSheet(RAW_SHEET,ws);
+  }
+
+  setProg("Excelファイルを出力中…");
+  XLSX.writeFile(wb,"粗利分析レポート.xlsx",{cellStyles:true,bookSST:false});
+}
+</script>
+</body>
+</html>
