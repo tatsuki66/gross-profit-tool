@@ -68,9 +68,9 @@ const bord  = (argb=C.bdr) => {
 };
 
 const ST = {
-  hdrL: { fill:fill('FF'+C.navyBg), font:fnt(true,'FF'+C.navyFg), border:bord('FF4A6080'), alignment:{horizontal:'left',  vertical:'middle'} },
-  hdrR: { fill:fill('FF'+C.navyBg), font:fnt(true,'FF'+C.navyFg), border:bord('FF4A6080'), alignment:{horizontal:'right', vertical:'middle'} },
-  subL: { fill:fill('FF'+C.blueBg), font:fnt(true,'FF'+C.blueFg), border:bord('FF5080A0'), alignment:{horizontal:'left',  vertical:'middle'} },
+  hdrL: { fill:fill('FF'+C.navyBg), font:fnt(true,'FFFFFFFF'), border:bord('FF4A6080'), alignment:{horizontal:'left',  vertical:'middle'} },
+  hdrR: { fill:fill('FF'+C.navyBg), font:fnt(true,'FFFFFFFF'), border:bord('FF4A6080'), alignment:{horizontal:'right', vertical:'middle'} },
+  subL: { fill:fill('FF'+C.blueBg), font:fnt(true,'FFFFFFFF'), border:bord('FF5080A0'), alignment:{horizontal:'left',  vertical:'middle'} },
   titl: { fill:fill('FFFFFFFF'),    font:fnt(true,'FF'+C.navyBg, 13),                       alignment:{horizontal:'left',  vertical:'middle'} },
   note: { fill:fill('FFFFFFFF'),    font:{ name:'Meiryo UI', size:9, color:{argb:'FF888888'}, italic:true }, alignment:{horizontal:'left', vertical:'middle'} },
   totL: { fill:fill(C.totBg),  font:fnt(true,C.totFg),  border:bord(C.bdr), alignment:{horizontal:'left',  vertical:'middle'}, numFmt:'@'     },
